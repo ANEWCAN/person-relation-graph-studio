@@ -29,7 +29,7 @@ ALLOWED_EXTENSIONS = {"json", "csv", "xlsx", "xlsm"}
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
 AVATAR_COUNT_PER_GENDER = 50
-AVATAR_ASSET_VERSION = "1.2.0"
+AVATAR_ASSET_VERSION = "1.3.0"
 AVATAR_FILE_PATTERN = re.compile(r"^(male|female)_(\d{2})\.svg$")
 
 
@@ -89,6 +89,43 @@ def default_avatar(name: str, gender: str) -> str:
     return f"/static/avatars/{gender}_{index:02d}.svg"
 
 
+def assign_missing_avatars(nodes: list[dict[str, Any]]) -> int:
+    """Assign stable, gender-matched built-in avatars to nodes without one.
+
+    The first 50 nodes of each supported gender are given distinct avatar files
+    whenever possible. Existing custom or imported avatar values are preserved.
+    """
+    used: dict[str, set[int]] = {"male": set(), "female": set()}
+    assigned = 0
+
+    for node in nodes:
+        avatar = clean_text(node.get("avatar"))
+        match = re.search(r"/(male|female)_(\d{2})\.svg(?:\?|$)", avatar)
+        if match:
+            gender, index_text = match.groups()
+            index = int(index_text)
+            if 1 <= index <= AVATAR_COUNT_PER_GENDER:
+                used[gender].add(index)
+
+    for node in nodes:
+        if clean_text(node.get("avatar")):
+            continue
+        gender = normalize_gender(node.get("gender"))
+        if gender not in used:
+            continue
+        seed = clean_text(node.get("name")) or clean_text(node.get("id")) or str(assigned)
+        preferred = int(hashlib.md5(seed.encode("utf-8")).hexdigest()[:8], 16) % AVATAR_COUNT_PER_GENDER + 1
+        index = preferred
+        for _ in range(AVATAR_COUNT_PER_GENDER):
+            if index not in used[gender]:
+                break
+            index = index % AVATAR_COUNT_PER_GENDER + 1
+        node["avatar"] = f"/static/avatars/{gender}_{index:02d}.svg?v={AVATAR_ASSET_VERSION}"
+        used[gender].add(index)
+        assigned += 1
+    return assigned
+
+
 def avatar_catalog() -> list[dict[str, Any]]:
     """Build the avatar catalog from files that actually exist on disk.
 
@@ -130,7 +167,7 @@ def normalize_node(raw: dict[str, Any], fallback_name: str = "") -> dict[str, An
     node_id = clean_text(raw.get("id") or raw.get("node_id") or raw.get("人物ID"))
     if not node_id:
         node_id = stable_id("n", name)
-    avatar = clean_text(raw.get("avatar") or raw.get("image") or raw.get("头像")) or default_avatar(name, gender)
+    avatar = clean_text(raw.get("avatar") or raw.get("image") or raw.get("头像"))
     tags = raw.get("tags") or raw.get("标签") or []
     if isinstance(tags, str):
         tags = [part.strip() for part in re.split(r"[,，;；|]", tags) if part.strip()]
@@ -223,6 +260,7 @@ def normalize_graph(raw_nodes: Iterable[dict[str, Any]], raw_edges: Iterable[dic
             name_to_id[node["id"]] = node["id"]
 
     dedupe_ids(nodes, "n")
+    assign_missing_avatars(nodes)
     name_to_id = {node["name"]: node["id"] for node in nodes}
     name_to_id.update({node["id"]: node["id"] for node in nodes})
     node_ids = {node["id"] for node in nodes}
@@ -559,7 +597,7 @@ def sample_template_data() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
 
 
 class RelationshipGraphHandler(BaseHTTPRequestHandler):
-    server_version = "RelationshipGraphStudio/1.2"
+    server_version = "RelationshipGraphStudio/1.3"
 
     def log_message(self, fmt: str, *args: Any) -> None:
         print(f"[{self.log_date_time_string()}] {fmt % args}")

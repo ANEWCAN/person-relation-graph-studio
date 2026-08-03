@@ -51,6 +51,16 @@ http://127.0.0.1:5000
 
 If port 5000 is unavailable, the launcher tries ports 5001 through 5010.
 
+## Canvas controls
+
+The canvas toolbar contains three independent interaction modes:
+
+- **Select**: select a person or relationship without entering a personal network or replacing unfinished sidebar input.
+- **Focus**: click a person to display the selected 1–3 degree relationship network.
+- **Quick link**: click two people in sequence to create a relationship using the current relationship form settings.
+
+Use **Auto arrange** to reorganize the full graph or the currently focused subnetwork. Imported people without avatars are assigned built-in avatars according to gender.
+
 ## Troubleshooting
 
 - `python` not found: install Python 3.10+ and add it to PATH.

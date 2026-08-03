@@ -15,7 +15,7 @@
   };
 
   const AVATAR_COUNT_PER_GENDER = 50;
-  const AVATAR_ASSET_VERSION = '1.2.0';
+  const AVATAR_ASSET_VERSION = '1.3.0';
 
   const SAMPLE_GRAPH = {
     nodes: [
@@ -57,6 +57,8 @@
     selectedId: null,
     focusedNodeId: null,
     focusDepth: 1,
+    interactionMode: 'select',
+    linkSourceId: null,
     history: [],
     future: [],
     avatars: [],
@@ -71,6 +73,7 @@
       showNodeLabels: true,
       showEdgeLabels: true,
       physicsEnabled: true,
+      autoArrange: true,
     },
   };
 
@@ -107,6 +110,36 @@
 
   function isHexColor(value) {
     return /^#[0-9a-fA-F]{6}$/.test(String(value || ''));
+  }
+
+  function builtInAvatarUrl(gender, seed) {
+    if (!['male', 'female'].includes(gender)) return '';
+    const index = stringSeed(seed || gender) % AVATAR_COUNT_PER_GENDER + 1;
+    return `/static/avatars/${gender}_${String(index).padStart(2, '0')}.svg?v=${AVATAR_ASSET_VERSION}`;
+  }
+
+  function assignMissingAvatars(nodes) {
+    const used = { male: new Set(), female: new Set() };
+    for (const node of nodes) {
+      const match = String(node.avatar || '').match(/\/(male|female)_(\d{2})\.svg(?:\?|$)/);
+      if (match) used[match[1]].add(Number(match[2]));
+    }
+    for (const node of nodes) {
+      if (String(node.avatar || '').trim()) continue;
+      const seed = node.name || node.id || 'avatar';
+      if (!['male', 'female'].includes(node.gender)) {
+        node.avatar = generatedAvatarFallback('unknown', seed);
+        continue;
+      }
+      let index = stringSeed(seed) % AVATAR_COUNT_PER_GENDER + 1;
+      for (let tries = 0; tries < AVATAR_COUNT_PER_GENDER; tries += 1) {
+        if (!used[node.gender].has(index)) break;
+        index = index % AVATAR_COUNT_PER_GENDER + 1;
+      }
+      node.avatar = `/static/avatars/${node.gender}_${String(index).padStart(2, '0')}.svg?v=${AVATAR_ASSET_VERSION}`;
+      used[node.gender].add(index);
+    }
+    return nodes;
   }
 
   function sanitizeNode(node) {
@@ -153,6 +186,7 @@
       usedNames.add(node.name);
       nodes.push(node);
     }
+    assignMissingAvatars(nodes);
     const nodeIds = new Set(nodes.map((node) => node.id));
     const edges = [];
     const usedEdgeIds = new Set();
@@ -347,22 +381,53 @@
     }
 
     preloadImages() {
+      const activeUrls = new Set();
       for (const node of this.graph.nodes) {
-        if (!node.avatar || this.imageMap.has(node.avatar)) continue;
+        if (!node.avatar) node.avatar = builtInAvatarUrl(node.gender, node.name || node.id) || generatedAvatarFallback(node.gender, node.name || node.id);
+        const avatarUrl = node.avatar;
+        activeUrls.add(avatarUrl);
+        const cached = this.imageMap.get(avatarUrl);
+        if (cached && (!cached.complete || cached.naturalWidth > 0)) continue;
+        if (cached) this.imageMap.delete(avatarUrl);
         const image = new Image();
         let fallbackApplied = false;
+        image.decoding = 'async';
         image.onload = () => this.requestDraw();
         image.onerror = () => {
-          if (!fallbackApplied && ['male', 'female'].includes(node.gender)) {
+          if (!fallbackApplied) {
             fallbackApplied = true;
-            image.src = generatedAvatarFallback(node.gender, node.name || node.id);
+            image.src = generatedAvatarFallback(node.gender, node.name || node.id || avatarUrl);
             return;
           }
           this.requestDraw();
         };
-        image.src = node.avatar;
-        this.imageMap.set(node.avatar, image);
+        this.imageMap.set(avatarUrl, image);
+        image.src = avatarUrl;
       }
+      for (const key of this.imageMap.keys()) {
+        if (!activeUrls.has(key) && this.imageMap.size > 180) this.imageMap.delete(key);
+      }
+    }
+
+    updateCursor(event = null) {
+      if (runtime.interactionMode === 'link') {
+        if (!event) { this.canvas.style.cursor = 'crosshair'; return; }
+        const point = this.eventPoint(event);
+        const node = this.hitNode(this.screenToWorld(point.x, point.y));
+        this.canvas.style.cursor = node ? 'crosshair' : 'not-allowed';
+        return;
+      }
+      if (runtime.interactionMode === 'focus') {
+        if (!event) { this.canvas.style.cursor = 'zoom-in'; return; }
+        const point = this.eventPoint(event);
+        const world = this.screenToWorld(point.x, point.y);
+        this.canvas.style.cursor = this.hitNode(world) ? 'zoom-in' : this.hitEdge(world) ? 'pointer' : 'grab';
+        return;
+      }
+      if (!event) { this.canvas.style.cursor = 'grab'; return; }
+      const point = this.eventPoint(event);
+      const world = this.screenToWorld(point.x, point.y);
+      this.canvas.style.cursor = this.hitNode(world) || this.hitEdge(world) ? 'pointer' : 'grab';
     }
 
     requestDraw() {
@@ -396,7 +461,8 @@
     }
 
     physicsTick() {
-      const nodes = this.graph.nodes.filter((node) => runtime.filters.genders.has(node.gender));
+      const nodes = this.layoutTargetNodes();
+      const nodeIds = new Set(nodes.map((node) => node.id));
       const n = nodes.length;
       if (!n) return 0;
       const maxPairs = 24000;
@@ -424,6 +490,7 @@
         }
       }
       for (const edge of this.visibleEdges()) {
+        if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target)) continue;
         const source = this.nodeMap.get(edge.source);
         const target = this.nodeMap.get(edge.target);
         if (!source || !target) continue;
@@ -455,6 +522,18 @@
 
     visibleNodes() {
       return this.graph.nodes.filter((node) => runtime.filters.genders.has(node.gender));
+    }
+
+    layoutTargetNodes() {
+      const visible = this.visibleNodes();
+      if (!runtime.focusedNodeId) return visible;
+      const focusSet = this.neighborhood(runtime.focusedNodeId, runtime.focusDepth);
+      return visible.filter((node) => focusSet.has(node.id));
+    }
+
+    edgesForNodes(nodes) {
+      const ids = new Set(nodes.map((node) => node.id));
+      return this.visibleEdges().filter((edge) => ids.has(edge.source) && ids.has(edge.target));
     }
 
     visibleEdges() {
@@ -633,17 +712,20 @@
       const inFocus = !focusSet || focusSet.has(node.id);
       const isCenter = runtime.focusedNodeId === node.id;
       const isSelected = runtime.selectedType === 'node' && runtime.selectedId === node.id;
+      const isLinkSource = runtime.interactionMode === 'link' && runtime.linkSourceId === node.id;
       const alpha = inFocus ? 1 : 0.11;
       ctx.save();
       ctx.globalAlpha = alpha;
-      if (isSelected || isCenter) {
+      if (isSelected || isCenter || isLinkSource) {
         ctx.beginPath();
-        ctx.arc(node.x, node.y, radius + (isCenter ? 10 : 7), 0, Math.PI * 2);
-        ctx.strokeStyle = isCenter ? COLORS.accent : 'rgba(255,255,255,.75)';
-        ctx.lineWidth = isCenter ? 3 : 2;
-        ctx.shadowColor = isCenter ? COLORS.accent : 'rgba(255,255,255,.5)';
-        ctx.shadowBlur = isCenter ? 22 : 12;
+        ctx.arc(node.x, node.y, radius + (isCenter ? 10 : isLinkSource ? 11 : 7), 0, Math.PI * 2);
+        ctx.strokeStyle = isLinkSource ? '#34D399' : isCenter ? COLORS.accent : 'rgba(255,255,255,.75)';
+        ctx.lineWidth = isLinkSource ? 3.5 : isCenter ? 3 : 2;
+        if (isLinkSource) ctx.setLineDash([7, 5]);
+        ctx.shadowColor = isLinkSource ? '#34D399' : isCenter ? COLORS.accent : 'rgba(255,255,255,.5)';
+        ctx.shadowBlur = isCenter || isLinkSource ? 22 : 12;
         ctx.stroke();
+        ctx.setLineDash([]);
         ctx.shadowBlur = 0;
       }
 
@@ -765,10 +847,22 @@
       if (event.button !== 0) return;
       const point = this.eventPoint(event);
       const world = this.screenToWorld(point.x, point.y);
+      const node = this.hitNode(world);
+
+      if (node && runtime.interactionMode === 'link') {
+        if (this.onNodeSelect) this.onNodeSelect(node.id);
+        this.requestDraw();
+        return;
+      }
+      if (node && runtime.interactionMode === 'focus') {
+        if (this.onNodeSelect) this.onNodeSelect(node.id);
+        this.requestDraw();
+        return;
+      }
+
       this.pointerStart = point;
       this.lastPointer = point;
       this.moved = false;
-      const node = this.hitNode(world);
       if (node) {
         this.dragNode = node;
         this.dragNodeWasFixed = node.fixed;
@@ -789,9 +883,7 @@
 
     handlePointerMove(event) {
       if (!this.pointerStart) {
-        const point = this.eventPoint(event);
-        const world = this.screenToWorld(point.x, point.y);
-        this.canvas.style.cursor = this.hitNode(world) || this.hitEdge(world) ? 'pointer' : 'grab';
+        this.updateCursor(event);
         return;
       }
       const point = this.eventPoint(event);
@@ -828,6 +920,7 @@
       this.lastPointer = null;
       this.canvas.parentElement.classList.remove('dragging');
       try { this.canvas.releasePointerCapture?.(event.pointerId); } catch (_) { /* no-op */ }
+      this.updateCursor(event);
       this.requestDraw();
     }
 
@@ -900,8 +993,15 @@
       this.requestDraw();
     }
 
-    applyLayout(name) {
-      const nodes = this.visibleNodes();
+    autoArrange({ releaseFixed = true, fit = true } = {}) {
+      const nodes = this.layoutTargetNodes();
+      if (!nodes.length) return;
+      if (releaseFixed) nodes.forEach((node) => { node.fixed = false; });
+      this.applyLayout('force', { fit });
+    }
+
+    applyLayout(name, { fit = true } = {}) {
+      const nodes = this.layoutTargetNodes();
       if (!nodes.length) return;
       runtime.lastLayout = name;
       this.stopPhysics();
@@ -949,13 +1049,14 @@
         });
       }
       scheduleAutosave();
-      this.fit(0.82);
+      if (fit) this.fit(0.82, nodes);
       this.requestDraw();
     }
 
     radialLayout(nodes) {
       const degree = new Map(nodes.map((node) => [node.id, 0]));
-      for (const edge of this.visibleEdges()) {
+      const layoutEdges = this.edgesForNodes(nodes);
+      for (const edge of layoutEdges) {
         degree.set(edge.source, (degree.get(edge.source) || 0) + 1);
         degree.set(edge.target, (degree.get(edge.target) || 0) + 1);
       }
@@ -971,7 +1072,7 @@
       while (frontier.length) {
         const next = [];
         for (const id of frontier) {
-          for (const edge of this.visibleEdges()) {
+          for (const edge of layoutEdges) {
             const other = edge.source === id ? edge.target : edge.target === id ? edge.source : null;
             if (other && !visited.has(other)) { visited.add(other); next.push(other); }
           }
@@ -994,7 +1095,7 @@
     }
 
     hierarchyLayout(nodes) {
-      const visibleEdges = this.visibleEdges();
+      const visibleEdges = this.edgesForNodes(nodes);
       const indegree = new Map(nodes.map((node) => [node.id, 0]));
       for (const edge of visibleEdges) if (edge.directed) indegree.set(edge.target, (indegree.get(edge.target) || 0) + 1);
       let roots = nodes.filter((node) => (indegree.get(node.id) || 0) === 0);
@@ -1102,35 +1203,58 @@
     return runtime.graph.edges.filter((edge) => edge.source === nodeId || edge.target === nodeId);
   }
 
+  function focusNetwork(id, { fit = true } = {}) {
+    const node = nodeById(id);
+    if (!node) return;
+    runtime.focusedNodeId = id;
+    updateFocusBanner();
+    if (fit) graphView.focusNode(id, runtime.focusDepth);
+    graphView.requestDraw();
+  }
+
+  function beginEditNode(id, { switchTab = true } = {}) {
+    const node = nodeById(id);
+    if (!node) return;
+    fillPersonForm(node);
+    if (switchTab) tabTo('people');
+  }
+
+  function beginEditEdge(id, { switchTab = true } = {}) {
+    const edge = edgeById(id);
+    if (!edge) return;
+    fillRelationForm(edge);
+    if (switchTab) tabTo('relations');
+  }
+
   function selectNode(id, options = {}) {
     const node = nodeById(id);
     if (!node) return;
     runtime.selectedType = 'node';
     runtime.selectedId = id;
-    runtime.focusedNodeId = id;
-    fillPersonForm(node);
+    if (options.edit === true) beginEditNode(id, { switchTab: options.switchTab !== false });
+    if (options.focus === true) focusNetwork(id, { fit: options.fit !== false });
     renderInspector();
-    updateFocusBanner();
     graphView.requestDraw();
-    if (options.fit !== false) graphView.focusNode(id, runtime.focusDepth);
   }
 
-  function selectEdge(id) {
+  function selectEdge(id, options = {}) {
     const edge = edgeById(id);
     if (!edge) return;
     runtime.selectedType = 'edge';
     runtime.selectedId = id;
-    fillRelationForm(edge);
+    if (options.edit === true) beginEditEdge(id, { switchTab: options.switchTab !== false });
     renderInspector();
     graphView.requestDraw();
   }
 
-  function clearSelection({ clearFocus = false } = {}) {
+  function clearSelection({ clearFocus = false, clearForms = false } = {}) {
     runtime.selectedType = null;
     runtime.selectedId = null;
     if (clearFocus) runtime.focusedNodeId = null;
-    resetPersonForm();
-    resetRelationForm();
+    if (clearForms) {
+      resetPersonForm();
+      resetRelationForm();
+    }
     renderInspector();
     updateFocusBanner();
     graphView.requestDraw();
@@ -1138,19 +1262,117 @@
 
   function resetFocus() {
     runtime.focusedNodeId = null;
-    if (runtime.selectedType === 'node') {
-      runtime.selectedType = null;
-      runtime.selectedId = null;
-    }
     updateFocusBanner();
     renderInspector();
     graphView.fit(0.84);
     graphView.requestDraw();
   }
 
-  graphView.onNodeSelect = (id) => selectNode(id);
-  graphView.onEdgeSelect = (id) => selectEdge(id);
-  graphView.onBackground = () => clearSelection({ clearFocus: true });
+  function relationDraftPayload(source, target) {
+    const colorText = $('#relationColorText').value.trim();
+    return {
+      source,
+      target,
+      relation: $('#relationName').value.trim() || '关系',
+      directed: $('#relationDirected').checked,
+      weight: Number($('#relationWeight').value) || 3,
+      color: (isHexColor(colorText) ? colorText : $('#relationColor').value).toUpperCase(),
+      lineStyle: $('#relationLineStyle').value,
+      note: $('#relationNote').value.trim(),
+    };
+  }
+
+  function updateInteractionUi() {
+    const buttons = {
+      select: $('#selectModeBtn'),
+      focus: $('#focusModeBtn'),
+      link: $('#linkModeBtn'),
+    };
+    Object.entries(buttons).forEach(([mode, button]) => {
+      if (!button) return;
+      const active = runtime.interactionMode === mode;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
+    const banner = $('#linkModeBanner');
+    if (banner) {
+      if (runtime.interactionMode !== 'link') {
+        banner.classList.add('hidden');
+      } else {
+        const source = nodeById(runtime.linkSourceId);
+        $('#linkModeText').textContent = source ? `起点：${source.name} · 请选择终点人物` : '请选择第一个人物作为起点';
+        banner.classList.remove('hidden');
+      }
+    }
+    graphView.updateCursor();
+    graphView.requestDraw();
+  }
+
+  function setInteractionMode(mode) {
+    if (!['select', 'focus', 'link'].includes(mode)) return;
+    runtime.interactionMode = mode;
+    if (mode !== 'link') {
+      runtime.linkSourceId = null;
+    } else {
+      $('#relationId').value = '';
+      $('#saveRelationBtn').textContent = '添加关系';
+      $('#deleteRelationBtn').classList.add('hidden');
+    }
+    updateInteractionUi();
+  }
+
+  function handleLinkNodeSelection(id) {
+    const node = nodeById(id);
+    if (!node) return;
+    if (!runtime.linkSourceId) {
+      runtime.linkSourceId = id;
+      $('#relationSource').value = id;
+      selectNode(id);
+      updateInteractionUi();
+      showToast('已选择连线起点', `${node.name}，请再选择一个人物作为终点。`);
+      return;
+    }
+    if (runtime.linkSourceId === id) {
+      showToast('请选择另一个人物', '连线的起点与终点不能相同。', 'error');
+      return;
+    }
+    const source = runtime.linkSourceId;
+    $('#relationTarget').value = id;
+    const payload = relationDraftPayload(source, id);
+    pushHistory();
+    const edge = sanitizeEdge({ id: uid('e'), ...payload }, new Set(runtime.graph.nodes.map((item) => item.id)));
+    runtime.graph.edges.push(edge);
+    runtime.linkSourceId = null;
+    runtime.selectedType = 'edge';
+    runtime.selectedId = edge.id;
+    syncAll({ runLayout: runtime.settings.autoArrange, fit: false });
+    selectEdge(edge.id);
+    updateInteractionUi();
+    showToast('关系连线已添加', `${nodeName(source)} — ${edge.relation} — ${nodeName(id)}`);
+  }
+
+  function handleCanvasNodeSelection(id) {
+    if (runtime.interactionMode === 'link') {
+      handleLinkNodeSelection(id);
+      return;
+    }
+    selectNode(id, { focus: runtime.interactionMode === 'focus' });
+  }
+
+  graphView.onNodeSelect = handleCanvasNodeSelection;
+  graphView.onEdgeSelect = (id) => {
+    if (runtime.interactionMode === 'link') return;
+    selectEdge(id);
+  };
+  graphView.onBackground = () => {
+    if (runtime.interactionMode === 'link' && runtime.linkSourceId) {
+      runtime.linkSourceId = null;
+      updateInteractionUi();
+      showToast('已取消当前连线起点');
+      return;
+    }
+    clearSelection({ clearFocus: false });
+  };
   graphView.onNodePinChange = (_, fixed) => showToast(fixed ? '节点已固定' : '节点已解除固定', fixed ? '双击可再次解除。' : '力导向布局可继续调整位置。');
 
   function tabTo(name) {
@@ -1158,12 +1380,12 @@
     $$('.tab-panel').forEach((panel) => panel.classList.toggle('active', panel.dataset.panel === name));
   }
 
-  function defaultAvatarForGender(gender, offset = Math.floor(Math.random() * AVATAR_COUNT_PER_GENDER) + 1) {
-    if (!['male', 'female'].includes(gender)) return '';
+  function defaultAvatarForGender(gender, seed = Math.floor(Math.random() * 1e9)) {
+    if (!['male', 'female'].includes(gender)) return generatedAvatarFallback('unknown', seed);
+    const offset = typeof seed === 'number' ? seed : stringSeed(seed);
     const available = runtime.avatars.filter((avatar) => avatar.gender === gender);
-    if (available.length) return available[(offset - 1) % available.length].url;
-    const index = ((offset - 1) % AVATAR_COUNT_PER_GENDER) + 1;
-    return `/static/avatars/${gender}_${String(index).padStart(2, '0')}.svg?v=${AVATAR_ASSET_VERSION}`;
+    if (available.length) return available[Math.abs(offset) % available.length].url;
+    return builtInAvatarUrl(gender, seed);
   }
 
   function setAvatarPreview(src, gender, name = '') {
@@ -1257,8 +1479,9 @@
     if (duplicate) { showToast('人物名称已存在', '同一图谱中建议使用唯一名称。', 'error'); return; }
     const gender = $('#personGender').value;
     const tags = $('#personTags').value.split(/[,，;；|]/).map((value) => value.trim()).filter(Boolean);
-    const avatar = $('#personAvatar').value || defaultAvatarForGender(gender);
+    const avatar = $('#personAvatar').value || defaultAvatarForGender(gender, name);
     pushHistory();
+    let savedId = id;
     if (id) {
       const node = nodeById(id);
       Object.assign(node, { name, gender, tags, avatar, note: $('#personNote').value.trim() });
@@ -1266,10 +1489,12 @@
     } else {
       const node = sanitizeNode({ id: uid('n'), name, gender, tags, avatar, note: $('#personNote').value.trim() });
       runtime.graph.nodes.push(node);
+      savedId = node.id;
       showToast('人物已添加', name);
-      selectNode(node.id, { fit: false });
     }
-    syncAll({ runLayout: true, fit: false });
+    syncAll({ runLayout: runtime.settings.autoArrange, fit: false });
+    selectNode(savedId);
+    beginEditNode(savedId, { switchTab: false });
   }
 
   function deletePerson(id = $('#personId').value) {
@@ -1281,8 +1506,8 @@
     pushHistory();
     runtime.graph.nodes = runtime.graph.nodes.filter((item) => item.id !== id);
     runtime.graph.edges = runtime.graph.edges.filter((edge) => edge.source !== id && edge.target !== id);
-    clearSelection({ clearFocus: true });
-    syncAll({ runLayout: true, fit: false });
+    clearSelection({ clearFocus: true, clearForms: true });
+    syncAll({ runLayout: runtime.settings.autoArrange, fit: false });
     showToast('人物已删除', `${node.name} 及其 ${relationCount} 条关系已移除。`);
   }
 
@@ -1295,29 +1520,22 @@
     if (!source || !target) { showToast('请选择起点和终点人物', '', 'error'); return; }
     if (source === target) { showToast('起点与终点不能相同', '如需表示人物自身属性，请使用标签或备注。', 'error'); return; }
     if (!relation) { showToast('关系名称不能为空', '', 'error'); $('#relationName').focus(); return; }
-    const colorText = $('#relationColorText').value.trim();
-    const color = isHexColor(colorText) ? colorText.toUpperCase() : $('#relationColor').value.toUpperCase();
-    const payload = {
-      source,
-      target,
-      relation,
-      directed: $('#relationDirected').checked,
-      weight: Number($('#relationWeight').value),
-      color,
-      lineStyle: $('#relationLineStyle').value,
-      note: $('#relationNote').value.trim(),
-    };
+    const payload = relationDraftPayload(source, target);
+    payload.relation = relation;
     pushHistory();
+    let savedId = id;
     if (id) {
       Object.assign(edgeById(id), payload);
       showToast('关系已更新', `${nodeName(source)} — ${relation} — ${nodeName(target)}`);
     } else {
       const edge = { id: uid('e'), ...payload };
       runtime.graph.edges.push(edge);
+      savedId = edge.id;
       showToast('关系已添加', `${nodeName(source)} — ${relation} — ${nodeName(target)}`);
-      selectEdge(edge.id);
     }
-    syncAll({ runLayout: true, fit: false });
+    syncAll({ runLayout: runtime.settings.autoArrange, fit: false });
+    selectEdge(savedId);
+    beginEditEdge(savedId, { switchTab: false });
   }
 
   function deleteRelation(id = $('#relationId').value) {
@@ -1327,7 +1545,8 @@
     pushHistory();
     runtime.graph.edges = runtime.graph.edges.filter((item) => item.id !== id);
     clearSelection({ clearFocus: false });
-    syncAll({ runLayout: true, fit: false });
+    resetRelationForm();
+    syncAll({ runLayout: runtime.settings.autoArrange, fit: false });
     showToast('关系已删除');
   }
 
@@ -1440,13 +1659,10 @@
         <button type="button" data-inspector-action="focus-node">聚焦网络</button>
       </div>`;
     $$('[data-inspector-edge]', body).forEach((button) => button.addEventListener('click', () => selectEdge(button.dataset.inspectorEdge)));
-    $('[data-inspector-action="edit-node"]', body).addEventListener('click', () => tabTo('people'));
-    $('[data-inspector-action="focus-node"]', body).addEventListener('click', () => {
-      runtime.focusedNodeId = node.id;
-      updateFocusBanner();
-      graphView.focusNode(node.id, runtime.focusDepth);
-      graphView.requestDraw();
-    });
+    const inspectorImage = $('.inspector-avatar img', body);
+    if (inspectorImage) inspectorImage.addEventListener('error', () => { inspectorImage.src = generatedAvatarFallback(node.gender, node.name || node.id); }, { once: true });
+    $('[data-inspector-action="edit-node"]', body).addEventListener('click', () => beginEditNode(node.id));
+    $('[data-inspector-action="focus-node"]', body).addEventListener('click', () => focusNetwork(node.id));
   }
 
   function renderEdgeInspector(body) {
@@ -1475,7 +1691,7 @@
         </div>
       </div>`;
     $$('[data-inspector-node]', body).forEach((button) => button.addEventListener('click', () => selectNode(button.dataset.inspectorNode)));
-    $('[data-inspector-action="edit-edge"]', body).addEventListener('click', () => tabTo('relations'));
+    $('[data-inspector-action="edit-edge"]', body).addEventListener('click', () => beginEditEdge(edge.id));
     $('[data-inspector-action="delete-edge"]', body).addEventListener('click', () => deleteRelation(edge.id));
   }
 
@@ -1490,8 +1706,14 @@
     renderInspector();
     updateHistoryButtons();
     scheduleAutosave();
-    if (runLayout && runtime.settings.physicsEnabled && runtime.lastLayout === 'force') graphView.startPhysics(380);
-    if (fit) window.setTimeout(() => graphView.fit(0.84), 30);
+    if (runLayout && runtime.settings.autoArrange) {
+      window.setTimeout(() => graphView.autoArrange({ releaseFixed: false, fit }), 20);
+    } else if (runLayout && runtime.settings.physicsEnabled && runtime.lastLayout === 'force') {
+      graphView.startPhysics(380);
+      if (fit) window.setTimeout(() => graphView.fit(0.84), 30);
+    } else if (fit) {
+      window.setTimeout(() => graphView.fit(0.84), 30);
+    }
   }
 
   function mergeGraphs(current, incoming) {
@@ -1505,7 +1727,10 @@
         const existing = result.nodes.find((node) => node.id === existingId);
         if (!existing.avatar && rawNode.avatar) existing.avatar = rawNode.avatar;
         if (!existing.note && rawNode.note) existing.note = rawNode.note;
-        if (existing.gender === 'unknown' && rawNode.gender !== 'unknown') existing.gender = rawNode.gender;
+        if (existing.gender === 'unknown' && rawNode.gender !== 'unknown') {
+          existing.gender = rawNode.gender;
+          if (!rawNode.avatar || String(existing.avatar || '').startsWith('data:image/svg+xml')) existing.avatar = rawNode.avatar || '';
+        }
         existing.tags = [...new Set([...(existing.tags || []), ...(rawNode.tags || [])])];
       } else {
         const node = sanitizeNode(rawNode);
@@ -1531,7 +1756,9 @@
     runtime.selectedType = null;
     runtime.selectedId = null;
     runtime.focusedNodeId = null;
-    syncAll({ runLayout: true, fit: true });
+    runtime.linkSourceId = null;
+    setInteractionMode('select');
+    syncAll({ runLayout: runtime.settings.autoArrange, fit: true });
     showToast(`${label}导入成功`, `共 ${runtime.graph.nodes.length} 个人物、${runtime.graph.edges.length} 条关系。`);
   }
 
@@ -1736,7 +1963,7 @@
     const partial = runtime.graph.nodes.find((node) => node.name.toLowerCase().includes(query));
     const node = exact || partial;
     if (!node) { showToast('未找到人物', `没有匹配“${$('#personSearch').value.trim()}”的人物。`, 'error'); return; }
-    selectNode(node.id);
+    selectNode(node.id, { focus: true });
   }
 
   function clearGraph() {
@@ -1744,7 +1971,9 @@
     if (!window.confirm('确定清空当前全部人物与关系吗？该操作可以撤销。')) return;
     pushHistory();
     runtime.graph = { nodes: [], edges: [] };
-    clearSelection({ clearFocus: true });
+    clearSelection({ clearFocus: true, clearForms: true });
+    runtime.linkSourceId = null;
+    setInteractionMode('select');
     syncAll({ fit: false });
     showToast('图谱已清空');
   }
@@ -1756,9 +1985,11 @@
     runtime.selectedType = null;
     runtime.selectedId = null;
     runtime.focusedNodeId = null;
+    runtime.linkSourceId = null;
     runtime.lastLayout = 'force';
-    syncAll({ runLayout: true, fit: true });
-    showToast('示例图谱已载入', '可直接点击人物体验局部关系查询。');
+    setInteractionMode('select');
+    syncAll({ runLayout: runtime.settings.autoArrange, fit: true });
+    showToast('示例图谱已载入', '默认点击只选择人物，切换到聚焦模式可查看局部网络。');
   }
 
   function bindUi() {
@@ -1775,12 +2006,20 @@
     $('#clearBtn').addEventListener('click', clearGraph);
     $('#emptyAddBtn').addEventListener('click', () => { tabTo('people'); $('#personName').focus(); });
     $('#closeInspectorBtn').addEventListener('click', () => clearSelection({ clearFocus: false }));
+    $('#selectModeBtn').addEventListener('click', () => setInteractionMode('select'));
+    $('#focusModeBtn').addEventListener('click', () => setInteractionMode('focus'));
+    $('#linkModeBtn').addEventListener('click', () => setInteractionMode('link'));
+    $('#cancelLinkModeBtn').addEventListener('click', () => setInteractionMode('select'));
+    $('#autoArrangeBtn').addEventListener('click', () => {
+      graphView.autoArrange({ releaseFixed: true, fit: true });
+      showToast(runtime.focusedNodeId ? '当前子网络已自动整理' : '全图已自动整理');
+    });
 
     $('#personName').addEventListener('input', () => setAvatarPreview($('#personAvatar').value, $('#personGender').value, $('#personName').value));
     $('#personGender').addEventListener('change', () => {
       const gender = $('#personGender').value;
       const current = $('#personAvatar').value;
-      if (!current || current.includes('/static/avatars/')) $('#personAvatar').value = defaultAvatarForGender(gender);
+      if (!current || current.includes('/static/avatars/')) $('#personAvatar').value = defaultAvatarForGender(gender, $('#personName').value || gender);
       setAvatarPreview($('#personAvatar').value, gender, $('#personName').value);
       updateAvatarLibraryCounts();
       renderAvatarGallery();
@@ -1871,6 +2110,10 @@
       runtime.settings.physicsEnabled = $('#physicsEnabled').checked;
       if (runtime.settings.physicsEnabled && runtime.lastLayout === 'force') graphView.startPhysics(500); else graphView.stopPhysics();
     });
+    $('#autoArrangeEnabled').addEventListener('change', () => {
+      runtime.settings.autoArrange = $('#autoArrangeEnabled').checked;
+      showToast(runtime.settings.autoArrange ? '自动整理已开启' : '自动整理已关闭');
+    });
 
     $('#zoomInBtn').addEventListener('click', () => graphView.zoom(1.2));
     $('#zoomOutBtn').addEventListener('click', () => graphView.zoom(1 / 1.2));
@@ -1888,7 +2131,11 @@
         if (runtime.selectedType === 'node') deletePerson(runtime.selectedId);
         if (runtime.selectedType === 'edge') deleteRelation(runtime.selectedId);
       }
-      if (event.key === 'Escape') resetFocus();
+      if (event.key === 'Escape') {
+        if (runtime.interactionMode === 'link') setInteractionMode('select');
+        else if (runtime.focusedNodeId) resetFocus();
+        else clearSelection({ clearFocus: false });
+      }
       if (event.key.toLowerCase() === 'f') graphView.fit(0.84);
     });
   }
@@ -1901,7 +2148,8 @@
     let stored = null;
     try { stored = JSON.parse(localStorage.getItem('personRelationshipGraphStudio') || 'null'); } catch (_) { stored = null; }
     runtime.graph = sanitizeGraph(stored?.nodes?.length ? stored : deepClone(SAMPLE_GRAPH));
-    syncAll({ runLayout: true, fit: true });
+    setInteractionMode('select');
+    syncAll({ runLayout: runtime.settings.autoArrange, fit: true });
     updateHistoryButtons();
     window.setTimeout(() => graphView.fit(0.84), 120);
   }

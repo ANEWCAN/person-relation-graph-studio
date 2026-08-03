@@ -41,6 +41,26 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(len(graph["nodes"]), 2)
         self.assertEqual(len(graph["edges"]), 1)
         self.assertFalse(graph["edges"][0]["directed"])
+        avatars = {node["gender"]: node["avatar"] for node in graph["nodes"]}
+        self.assertRegex(avatars["male"], r"/static/avatars/male_\d{2}\.svg")
+        self.assertRegex(avatars["female"], r"/static/avatars/female_\d{2}\.svg")
+
+    def test_missing_avatars_are_gender_matched_and_distributed(self) -> None:
+        graph = APP.normalize_graph(
+            [
+                {"id": "m1", "name": "男性一", "gender": "male"},
+                {"id": "m2", "name": "男性二", "gender": "male"},
+                {"id": "f1", "name": "女性一", "gender": "female"},
+                {"id": "f2", "name": "女性二", "gender": "female"},
+            ],
+            [],
+        )
+        male_avatars = [node["avatar"] for node in graph["nodes"] if node["gender"] == "male"]
+        female_avatars = [node["avatar"] for node in graph["nodes"] if node["gender"] == "female"]
+        self.assertEqual(len(set(male_avatars)), 2)
+        self.assertEqual(len(set(female_avatars)), 2)
+        self.assertTrue(all("/male_" in avatar for avatar in male_avatars))
+        self.assertTrue(all("/female_" in avatar for avatar in female_avatars))
 
     def test_xlsx_round_trip(self) -> None:
         nodes, edges = APP.sample_template_data()
@@ -106,6 +126,9 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(status, 200)
         parsed = json.loads(body)
         self.assertTrue(parsed["ok"])
+        avatars = {node["gender"]: node["avatar"] for node in parsed["graph"]["nodes"]}
+        self.assertRegex(avatars["male"], r"/static/avatars/male_\d{2}\.svg")
+        self.assertRegex(avatars["female"], r"/static/avatars/female_\d{2}\.svg")
         status, body, headers = self.post_json("/api/export/xlsx", {"graph": graph})
         self.assertEqual(status, 200)
         self.assertTrue(body.startswith(b"PK"))

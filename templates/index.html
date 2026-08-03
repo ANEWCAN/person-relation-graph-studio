@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0B1220">
   <title>人物关系图谱工作台</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=1.2.0">
+  <link rel="stylesheet" href="/static/css/style.css?v=1.3.0">
 </head>
 <body>
   <div class="app-shell">
@@ -78,7 +78,7 @@
                 <button type="button" class="mini-btn" id="openAvatarGalleryBtn">头像库</button>
                 <button type="button" class="mini-btn" id="generateAvatarBtn">即时生成</button>
                 <label class="mini-btn file-mini-btn">本地上传<input id="avatarFileInput" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml"></label>
-                <p>内置 64 个差异化男女头像，也可生成或上传自定义头像。</p>
+                <p>内置 100 个差异化男女头像；新增和导入人物会按性别自动匹配头像，也可生成或上传自定义头像。</p>
               </div>
             </div>
             <input id="personAvatar" type="hidden">
@@ -113,7 +113,7 @@
 
             <div class="panel-tip">
               <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
-              <p>点击画布中的人物可进入编辑，并自动突出其关系网络；双击人物可固定或解除位置。</p>
+              <p>画布默认只选择人物，不会覆盖左侧输入。需要编辑时可在右侧详情点击“编辑人物”；双击人物可固定或解除位置。</p>
             </div>
           </section>
 
@@ -272,6 +272,7 @@
               <label class="toggle-row compact" for="showNodeLabels"><span><strong>显示人物名称</strong></span><input id="showNodeLabels" type="checkbox" checked><i></i></label>
               <label class="toggle-row compact" for="showEdgeLabels"><span><strong>显示关系名称</strong></span><input id="showEdgeLabels" type="checkbox" checked><i></i></label>
               <label class="toggle-row compact" for="physicsEnabled"><span><strong>力导向动态布局</strong><small>关闭后节点保持当前位置</small></span><input id="physicsEnabled" type="checkbox" checked><i></i></label>
+              <label class="toggle-row compact" for="autoArrangeEnabled"><span><strong>新增后自动整理</strong><small>添加人物、关系或导入数据后自动优化分布</small></span><input id="autoArrangeEnabled" type="checkbox" checked><i></i></label>
             </div>
 
             <div class="shortcut-list">
@@ -287,6 +288,12 @@
       <section class="graph-stage" aria-label="人物关系图谱画布">
         <canvas id="graphCanvas"></canvas>
         <div class="canvas-toolbar" aria-label="画布工具栏">
+          <button class="active" id="selectModeBtn" type="button" title="选择模式：只选择节点或关系" aria-pressed="true"><svg viewBox="0 0 24 24"><path d="m5 3 14 8-7 2-3 7z"/></svg></button>
+          <button id="focusModeBtn" type="button" title="聚焦模式：点击人物进入局部网络" aria-pressed="false"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+          <button id="linkModeBtn" type="button" title="快速连线：依次选择两个节点" aria-pressed="false"><svg viewBox="0 0 24 24"><circle cx="6" cy="7" r="3"/><circle cx="18" cy="17" r="3"/><path d="m8.5 9 7 6"/></svg></button>
+          <span></span>
+          <button id="autoArrangeBtn" type="button" title="自动整理当前网络"><svg viewBox="0 0 24 24"><path d="m12 3 1.4 4.1L17.5 8.5l-4.1 1.4L12 14l-1.4-4.1-4.1-1.4 4.1-1.4zM18 14l.9 2.6 2.6.9-2.6.9L18 21l-.9-2.6-2.6-.9 2.6-.9zM5 15l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></svg></button>
+          <span></span>
           <button id="zoomInBtn" type="button" title="放大"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M11 8v6M8 11h6M21 21l-4.35-4.35"/></svg></button>
           <button id="zoomOutBtn" type="button" title="缩小"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M8 11h6M21 21l-4.35-4.35"/></svg></button>
           <button id="fitBtn" type="button" title="适配画布"><svg viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg></button>
@@ -300,9 +307,13 @@
           <span>当前聚焦</span><strong id="focusName">—</strong><em id="focusSummary">一度关系网</em><button id="closeFocusBtn" type="button">×</button>
         </div>
 
+        <div class="link-mode-banner hidden" id="linkModeBanner">
+          <strong>快速连线</strong><span id="linkModeText">请选择第一个人物作为起点</span><button id="cancelLinkModeBtn" type="button">退出</button>
+        </div>
+
         <div class="canvas-hint" id="canvasHint">
           <span class="mouse-icon"></span>
-          滚轮缩放 · 拖动画布 · 拖动人物 · 点击人物查询关系网络
+          默认点击只选择 · 聚焦模式查看子网络 · 连线模式依次选择两个节点
         </div>
 
         <div class="empty-state hidden" id="emptyState">
@@ -353,6 +364,6 @@
   </dialog>
 
   <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
-  <script src="/static/js/app.js?v=1.2.0"></script>
+  <script src="/static/js/app.js?v=1.3.0"></script>
 </body>
 </html>
