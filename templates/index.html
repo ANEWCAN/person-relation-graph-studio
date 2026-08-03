@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0B1220">
+  <title>人物关系图谱工作台</title>
+  <link rel="stylesheet" href="/static/css/style.css?v=1.2.0">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <div>
+          <h1>人物关系图谱工作台</h1>
+          <p>Person Relationship Graph Studio</p>
+        </div>
+      </div>
+
+      <div class="top-stats" aria-label="图谱统计">
+        <div class="stat-chip"><span>人物</span><strong id="statNodes">0</strong></div>
+        <div class="stat-chip"><span>关系</span><strong id="statEdges">0</strong></div>
+        <div class="stat-chip"><span>类型</span><strong id="statTypes">0</strong></div>
+        <div class="stat-chip"><span>密度</span><strong id="statDensity">0</strong></div>
+      </div>
+
+      <div class="top-actions">
+        <button class="icon-btn" id="undoBtn" type="button" title="撤销 Ctrl+Z" aria-label="撤销">
+          <svg viewBox="0 0 24 24"><path d="M9 7 4 12l5 5M5 12h8a6 6 0 1 1 0 12"/></svg>
+        </button>
+        <button class="icon-btn" id="redoBtn" type="button" title="重做 Ctrl+Y" aria-label="重做">
+          <svg viewBox="0 0 24 24"><path d="m15 7 5 5-5 5M19 12h-8a6 6 0 1 0 0 12"/></svg>
+        </button>
+        <button class="ghost-btn" id="sampleBtn" type="button">载入示例</button>
+        <button class="danger-ghost-btn" id="clearBtn" type="button">清空</button>
+        <div class="autosave-status" id="autosaveStatus"><span></span>已自动保存</div>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <aside class="sidebar" aria-label="编辑控制台">
+        <nav class="tab-nav" aria-label="功能标签页">
+          <button class="tab-btn active" type="button" data-tab="people">
+            <svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            人物
+          </button>
+          <button class="tab-btn" type="button" data-tab="relations">
+            <svg viewBox="0 0 24 24"><circle cx="5" cy="6" r="3"/><circle cx="19" cy="18" r="3"/><path d="m8 8 8 8M15 6h4v4"/></svg>
+            关系
+          </button>
+          <button class="tab-btn" type="button" data-tab="data">
+            <svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+            数据
+          </button>
+          <button class="tab-btn" type="button" data-tab="view">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            查询
+          </button>
+        </nav>
+
+        <div class="tab-panels">
+          <section class="tab-panel active" data-panel="people">
+            <div class="section-heading">
+              <div><span class="eyebrow">ENTITY EDITOR</span><h2>人物信息</h2></div>
+              <button class="text-btn" id="resetPersonFormBtn" type="button">新建</button>
+            </div>
+
+            <input id="personId" type="hidden">
+            <div class="avatar-editor">
+              <div class="avatar-preview male" id="avatarPreview">
+                <img id="avatarPreviewImg" alt="人物头像预览">
+                <span id="avatarInitials">新</span>
+              </div>
+              <div class="avatar-actions">
+                <button type="button" class="mini-btn" id="openAvatarGalleryBtn">头像库</button>
+                <button type="button" class="mini-btn" id="generateAvatarBtn">即时生成</button>
+                <label class="mini-btn file-mini-btn">本地上传<input id="avatarFileInput" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml"></label>
+                <p>内置 64 个差异化男女头像，也可生成或上传自定义头像。</p>
+              </div>
+            </div>
+            <input id="personAvatar" type="hidden">
+
+            <div class="form-grid">
+              <label class="field full">
+                <span>人物名称 <em>*</em></span>
+                <input id="personName" type="text" maxlength="60" placeholder="例如：林澈">
+              </label>
+              <label class="field">
+                <span>性别</span>
+                <select id="personGender">
+                  <option value="male">男</option>
+                  <option value="female">女</option>
+                  <option value="unknown">其他 / 未知</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>标签</span>
+                <input id="personTags" type="text" maxlength="120" placeholder="同事, 核心人物">
+              </label>
+              <label class="field full">
+                <span>备注 / 简介</span>
+                <textarea id="personNote" rows="3" maxlength="500" placeholder="可补充人物身份、组织、事件等信息"></textarea>
+              </label>
+            </div>
+
+            <div class="form-actions">
+              <button class="primary-btn" id="savePersonBtn" type="button">添加人物</button>
+              <button class="secondary-btn hidden" id="deletePersonBtn" type="button">删除人物</button>
+            </div>
+
+            <div class="panel-tip">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+              <p>点击画布中的人物可进入编辑，并自动突出其关系网络；双击人物可固定或解除位置。</p>
+            </div>
+          </section>
+
+          <section class="tab-panel" data-panel="relations">
+            <div class="section-heading">
+              <div><span class="eyebrow">RELATION EDITOR</span><h2>关系信息</h2></div>
+              <button class="text-btn" id="resetRelationFormBtn" type="button">新建</button>
+            </div>
+
+            <input id="relationId" type="hidden">
+            <div class="form-grid">
+              <label class="field full">
+                <span>起点人物 <em>*</em></span>
+                <select id="relationSource"></select>
+              </label>
+              <label class="field full">
+                <span>终点人物 <em>*</em></span>
+                <select id="relationTarget"></select>
+              </label>
+              <label class="field full">
+                <span>关系名称 <em>*</em></span>
+                <input id="relationName" type="text" maxlength="60" placeholder="例如：同事、朋友、汇报给">
+              </label>
+              <label class="field">
+                <span>线条颜色</span>
+                <div class="color-control"><input id="relationColor" type="color" value="#64748b"><input id="relationColorText" type="text" value="#64748B" maxlength="7"></div>
+              </label>
+              <label class="field">
+                <span>线型</span>
+                <select id="relationLineStyle">
+                  <option value="solid">实线</option>
+                  <option value="dashed">虚线</option>
+                  <option value="dotted">点线</option>
+                </select>
+              </label>
+              <label class="field full range-field">
+                <span>线条粗细 / 权重 <strong id="weightValue">3</strong></span>
+                <input id="relationWeight" type="range" min="0.5" max="12" step="0.5" value="3">
+              </label>
+              <label class="toggle-row full" for="relationDirected">
+                <span><strong>带箭头</strong><small>表示有方向的关系，例如“管理”“关注”“汇报给”</small></span>
+                <input id="relationDirected" type="checkbox">
+                <i aria-hidden="true"></i>
+              </label>
+              <label class="field full">
+                <span>关系备注</span>
+                <textarea id="relationNote" rows="2" maxlength="300" placeholder="可记录时间、证据或补充说明"></textarea>
+              </label>
+            </div>
+
+            <div class="form-actions">
+              <button class="primary-btn" id="saveRelationBtn" type="button">添加关系</button>
+              <button class="secondary-btn hidden" id="deleteRelationBtn" type="button">删除关系</button>
+            </div>
+          </section>
+
+          <section class="tab-panel" data-panel="data">
+            <div class="section-heading">
+              <div><span class="eyebrow">IMPORT & EXPORT</span><h2>数据管理</h2></div>
+            </div>
+
+            <div class="subsection">
+              <div class="subsection-title"><h3>文件导入</h3><span>JSON / CSV / XLSX</span></div>
+              <label class="drop-zone" id="dropZone">
+                <input id="graphFileInput" type="file" accept=".json,.csv,.xlsx,.xlsm">
+                <svg viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>
+                <strong>点击选择或拖拽文件</strong>
+                <span>单文件最大 20 MB</span>
+              </label>
+              <div class="inline-options">
+                <label><input type="radio" name="importMode" value="replace" checked> 替换当前图谱</label>
+                <label><input type="radio" name="importMode" value="merge"> 合并到当前图谱</label>
+              </div>
+              <div class="template-links">
+                <a href="/api/template/xlsx">下载 Excel 模板</a>
+                <a href="/api/template/csv">下载 CSV 模板</a>
+              </div>
+            </div>
+
+            <div class="subsection">
+              <div class="subsection-title"><h3>在线数据输入</h3><select id="textImportFormat"><option value="json">JSON</option><option value="csv">CSV</option></select></div>
+              <textarea class="code-input" id="textImportInput" rows="8" spellcheck="false" placeholder='JSON 示例：{"nodes":[...],"edges":[...]}'></textarea>
+              <button class="secondary-wide-btn" id="parseTextBtn" type="button">解析并导入</button>
+            </div>
+
+            <div class="subsection">
+              <div class="subsection-title"><h3>导出图数据</h3><span>保留全部属性</span></div>
+              <div class="export-row">
+                <select id="dataExportFormat">
+                  <option value="json">JSON</option>
+                  <option value="xlsx">Excel (.xlsx)</option>
+                  <option value="csv">CSV 双表压缩包</option>
+                  <option value="graphml">GraphML</option>
+                </select>
+                <button class="primary-compact-btn" id="exportDataBtn" type="button">导出</button>
+              </div>
+            </div>
+
+            <div class="subsection">
+              <div class="subsection-title"><h3>保存关系图图片</h3><span>高清输出</span></div>
+              <div class="image-export-grid">
+                <label class="field"><span>格式</span><select id="imageFormat"><option value="png">PNG</option><option value="jpeg">JPG</option></select></label>
+                <label class="field"><span>清晰度</span><select id="imageScale"><option value="1">1×</option><option value="2" selected>2×</option><option value="3">3×</option><option value="4">4×</option></select></label>
+              </div>
+              <label class="toggle-row compact" for="transparentImage">
+                <span><strong>透明背景</strong><small>JPG 导出时自动使用白色背景</small></span>
+                <input id="transparentImage" type="checkbox">
+                <i aria-hidden="true"></i>
+              </label>
+              <button class="secondary-wide-btn" id="exportImageBtn" type="button">保存网络图片</button>
+            </div>
+          </section>
+
+          <section class="tab-panel" data-panel="view">
+            <div class="section-heading">
+              <div><span class="eyebrow">SEARCH & VIEW</span><h2>查询与布局</h2></div>
+            </div>
+
+            <div class="subsection no-border">
+              <label class="field full search-field">
+                <span>查询单个人物网络</span>
+                <div><input id="personSearch" type="search" list="personSearchList" placeholder="输入人物名称"><button id="focusSearchBtn" type="button">定位</button></div>
+                <datalist id="personSearchList"></datalist>
+              </label>
+              <label class="field full range-field">
+                <span>关系网络层级 <strong id="focusDepthValue">1 度</strong></span>
+                <input id="focusDepth" type="range" min="1" max="3" step="1" value="1">
+              </label>
+              <button class="secondary-wide-btn" id="resetFocusBtn" type="button">恢复全图概览</button>
+            </div>
+
+            <div class="subsection">
+              <div class="subsection-title"><h3>筛选</h3><button class="text-btn" id="resetFiltersBtn" type="button">重置</button></div>
+              <label class="field full"><span>关系类型</span><select id="relationFilter"><option value="all">全部关系</option></select></label>
+              <div class="check-grid">
+                <label><input id="filterMale" type="checkbox" checked><span class="gender-dot male"></span>男性</label>
+                <label><input id="filterFemale" type="checkbox" checked><span class="gender-dot female"></span>女性</label>
+                <label><input id="filterUnknown" type="checkbox" checked><span class="gender-dot unknown"></span>其他</label>
+              </div>
+            </div>
+
+            <div class="subsection">
+              <div class="subsection-title"><h3>布局方式</h3><span>一键重排</span></div>
+              <div class="layout-grid">
+                <button type="button" data-layout="force" class="layout-btn active">力导向</button>
+                <button type="button" data-layout="circle" class="layout-btn">环形</button>
+                <button type="button" data-layout="grid" class="layout-btn">网格</button>
+                <button type="button" data-layout="radial" class="layout-btn">中心辐射</button>
+                <button type="button" data-layout="hierarchy" class="layout-btn">层级</button>
+                <button type="button" data-layout="random" class="layout-btn">随机</button>
+              </div>
+            </div>
+
+            <div class="subsection">
+              <div class="subsection-title"><h3>显示设置</h3></div>
+              <label class="toggle-row compact" for="showNodeLabels"><span><strong>显示人物名称</strong></span><input id="showNodeLabels" type="checkbox" checked><i></i></label>
+              <label class="toggle-row compact" for="showEdgeLabels"><span><strong>显示关系名称</strong></span><input id="showEdgeLabels" type="checkbox" checked><i></i></label>
+              <label class="toggle-row compact" for="physicsEnabled"><span><strong>力导向动态布局</strong><small>关闭后节点保持当前位置</small></span><input id="physicsEnabled" type="checkbox" checked><i></i></label>
+            </div>
+
+            <div class="shortcut-list">
+              <div><kbd>Delete</kbd><span>删除选中项</span></div>
+              <div><kbd>Esc</kbd><span>取消聚焦 / 选择</span></div>
+              <div><kbd>F</kbd><span>适配画布</span></div>
+              <div><kbd>Ctrl Z</kbd><span>撤销</span></div>
+            </div>
+          </section>
+        </div>
+      </aside>
+
+      <section class="graph-stage" aria-label="人物关系图谱画布">
+        <canvas id="graphCanvas"></canvas>
+        <div class="canvas-toolbar" aria-label="画布工具栏">
+          <button id="zoomInBtn" type="button" title="放大"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M11 8v6M8 11h6M21 21l-4.35-4.35"/></svg></button>
+          <button id="zoomOutBtn" type="button" title="缩小"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M8 11h6M21 21l-4.35-4.35"/></svg></button>
+          <button id="fitBtn" type="button" title="适配画布"><svg viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg></button>
+          <button id="centerBtn" type="button" title="居中"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/><path d="M12 3V1M12 23v-2M3 12H1M23 12h-2"/></svg></button>
+          <span></span>
+          <button id="lockAllBtn" type="button" title="固定全部节点"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></button>
+          <button id="unlockAllBtn" type="button" title="解除全部固定"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/></svg></button>
+        </div>
+
+        <div class="focus-banner hidden" id="focusBanner">
+          <span>当前聚焦</span><strong id="focusName">—</strong><em id="focusSummary">一度关系网</em><button id="closeFocusBtn" type="button">×</button>
+        </div>
+
+        <div class="canvas-hint" id="canvasHint">
+          <span class="mouse-icon"></span>
+          滚轮缩放 · 拖动画布 · 拖动人物 · 点击人物查询关系网络
+        </div>
+
+        <div class="empty-state hidden" id="emptyState">
+          <div class="empty-visual"><span></span><span></span><span></span></div>
+          <h2>开始构建人物关系图谱</h2>
+          <p>从左侧添加人物与关系，或导入已有的 JSON、CSV、Excel 数据。</p>
+          <button id="emptyAddBtn" type="button">添加第一个人物</button>
+        </div>
+      </section>
+
+      <aside class="inspector" id="inspector" aria-label="详情面板">
+        <div class="inspector-placeholder" id="inspectorPlaceholder">
+          <div class="placeholder-icon"><span></span><span></span><span></span></div>
+          <h2>图谱详情</h2>
+          <p>选择人物或关系后，在这里查看详细信息、关联对象与局部统计。</p>
+        </div>
+        <div class="inspector-content hidden" id="inspectorContent">
+          <div class="inspector-head">
+            <span class="inspector-type" id="inspectorType">人物</span>
+            <button id="closeInspectorBtn" type="button" aria-label="关闭详情">×</button>
+          </div>
+          <div id="inspectorBody"></div>
+        </div>
+
+        <div class="legend">
+          <h3>图例</h3>
+          <div><span class="legend-node male"></span><em>男性人物</em></div>
+          <div><span class="legend-node female"></span><em>女性人物</em></div>
+          <div><span class="legend-line"></span><em>无方向关系</em></div>
+          <div><span class="legend-arrow"></span><em>有方向关系</em></div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <dialog class="avatar-dialog" id="avatarDialog">
+    <div class="dialog-head">
+      <div><span class="eyebrow">AVATAR LIBRARY</span><h2>选择内置头像</h2><p id="avatarLibraryStatus">正在检查头像库……</p></div>
+      <button id="closeAvatarDialogBtn" type="button" aria-label="关闭">×</button>
+    </div>
+    <div class="avatar-filter">
+      <button class="active" type="button" data-avatar-filter="current">当前性别<span id="currentAvatarCount"></span></button>
+      <button type="button" data-avatar-filter="male">男性<span id="maleAvatarCount"></span></button>
+      <button type="button" data-avatar-filter="female">女性<span id="femaleAvatarCount"></span></button>
+      <button type="button" data-avatar-filter="all">全部<span id="allAvatarCount"></span></button>
+    </div>
+    <div class="avatar-gallery" id="avatarGallery"></div>
+  </dialog>
+
+  <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
+  <script src="/static/js/app.js?v=1.2.0"></script>
+</body>
+</html>

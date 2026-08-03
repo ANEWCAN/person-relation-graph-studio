@@ -1,0 +1,3 @@
+﻿source,target,relation,source_gender,target_gender,directed,weight,color,line_style
+林澈,苏晴,同事,male,female,false,3,#64748B,solid
+林澈,周屿,管理,male,male,true,4,#4C8DF6,solid

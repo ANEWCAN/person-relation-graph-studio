@@ -1,0 +1,59 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Runtime logs and temporary files
+startup.log
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+
+# Local exports and build output
+exports/
+output/
+downloads/
+build/
+dist/
+*.zip
+
+# IDE and editor settings
+.vscode/
+.idea/
+*.code-workspace
+
+# Operating system files
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Test and local tooling artifacts
+.tox/
+.nox/
+coverage.xml
+junit.xml

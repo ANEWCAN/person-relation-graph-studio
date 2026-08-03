@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Person Relation Graph Studio logo</title>
+  <desc id="desc">A modern relationship graph with blue and red portrait nodes connected around a central node.</desc>
+  <defs>
+    <linearGradient id="bg" x1="64" y1="48" x2="448" y2="464" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0F172A"/>
+      <stop offset="1" stop-color="#1E293B"/>
+    </linearGradient>
+    <linearGradient id="core" x1="196" y1="174" x2="320" y2="338" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8B5CF6"/>
+      <stop offset="1" stop-color="#4F46E5"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#020617" flood-opacity=".34"/>
+    </filter>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#bg)"/>
+  <g fill="none" stroke-linecap="round">
+    <path d="M256 256 142 148M256 256l121-91M256 256l112 121M256 256l-128 91" stroke="#64748B" stroke-width="14" opacity=".72"/>
+    <path d="M142 148 377 165M128 347l240 30" stroke="#475569" stroke-width="8" stroke-dasharray="12 18" opacity=".6"/>
+  </g>
+  <g filter="url(#shadow)">
+    <circle cx="256" cy="256" r="86" fill="url(#core)" stroke="#C4B5FD" stroke-width="10"/>
+    <circle cx="142" cy="148" r="58" fill="#F8FAFC" stroke="#3B82F6" stroke-width="12"/>
+    <circle cx="377" cy="165" r="54" fill="#F8FAFC" stroke="#F43F5E" stroke-width="12"/>
+    <circle cx="368" cy="377" r="58" fill="#F8FAFC" stroke="#3B82F6" stroke-width="12"/>
+    <circle cx="128" cy="347" r="54" fill="#F8FAFC" stroke="#F43F5E" stroke-width="12"/>
+  </g>
+  <g fill="#CBD5E1">
+    <circle cx="256" cy="230" r="24"/>
+    <path d="M207 302c8-31 27-47 49-47s41 16 49 47"/>
+  </g>
+  <g fill="#334155">
+    <circle cx="142" cy="132" r="16"/>
+    <path d="M111 181c5-21 17-32 31-32s26 11 31 32"/>
+    <circle cx="377" cy="150" r="15"/>
+    <path d="M348 194c5-20 16-30 29-30s24 10 29 30"/>
+    <circle cx="368" cy="360" r="16"/>
+    <path d="M337 409c5-21 17-32 31-32s26 11 31 32"/>
+    <circle cx="128" cy="332" r="15"/>
+    <path d="M99 376c5-20 16-30 29-30s24 10 29 30"/>
+  </g>
+  <circle cx="256" cy="256" r="9" fill="#FFFFFF"/>
+</svg>

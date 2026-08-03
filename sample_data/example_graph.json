@@ -1,0 +1,133 @@
+{
+  "nodes": [
+    {
+      "id": "p001",
+      "name": "林澈",
+      "gender": "male",
+      "avatar": "/static/avatars/male_03.svg",
+      "note": "项目负责人",
+      "tags": [
+        "核心人物",
+        "产品"
+      ]
+    },
+    {
+      "id": "p002",
+      "name": "苏晴",
+      "gender": "female",
+      "avatar": "/static/avatars/female_06.svg",
+      "note": "用户研究负责人",
+      "tags": [
+        "研究"
+      ]
+    },
+    {
+      "id": "p003",
+      "name": "周屿",
+      "gender": "male",
+      "avatar": "/static/avatars/male_11.svg",
+      "note": "技术负责人",
+      "tags": [
+        "技术"
+      ]
+    },
+    {
+      "id": "p004",
+      "name": "许知夏",
+      "gender": "female",
+      "avatar": "/static/avatars/female_12.svg",
+      "note": "品牌负责人",
+      "tags": [
+        "市场"
+      ]
+    },
+    {
+      "id": "p005",
+      "name": "陈墨",
+      "gender": "male",
+      "avatar": "/static/avatars/male_18.svg",
+      "note": "早期投资人",
+      "tags": [
+        "投资人"
+      ]
+    },
+    {
+      "id": "p006",
+      "name": "程安",
+      "gender": "female",
+      "avatar": "/static/avatars/female_19.svg",
+      "note": "外部顾问",
+      "tags": [
+        "顾问"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "r001",
+      "source": "p001",
+      "target": "p002",
+      "relation": "管理",
+      "directed": true,
+      "weight": 4,
+      "color": "#4C8DF6",
+      "lineStyle": "solid",
+      "note": ""
+    },
+    {
+      "id": "r002",
+      "source": "p001",
+      "target": "p003",
+      "relation": "联合创始人",
+      "directed": false,
+      "weight": 6,
+      "color": "#7C8CFF",
+      "lineStyle": "solid",
+      "note": ""
+    },
+    {
+      "id": "r003",
+      "source": "p001",
+      "target": "p004",
+      "relation": "管理",
+      "directed": true,
+      "weight": 4,
+      "color": "#4C8DF6",
+      "lineStyle": "solid",
+      "note": ""
+    },
+    {
+      "id": "r004",
+      "source": "p005",
+      "target": "p001",
+      "relation": "投资",
+      "directed": true,
+      "weight": 5,
+      "color": "#F59E0B",
+      "lineStyle": "solid",
+      "note": "种子轮投资"
+    },
+    {
+      "id": "r005",
+      "source": "p006",
+      "target": "p002",
+      "relation": "研究合作",
+      "directed": false,
+      "weight": 3,
+      "color": "#22C7A9",
+      "lineStyle": "dashed",
+      "note": ""
+    },
+    {
+      "id": "r006",
+      "source": "p006",
+      "target": "p003",
+      "relation": "技术顾问",
+      "directed": true,
+      "weight": 2.5,
+      "color": "#22C7A9",
+      "lineStyle": "dashed",
+      "note": ""
+    }
+  ]
+}

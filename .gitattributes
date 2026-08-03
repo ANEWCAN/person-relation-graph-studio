@@ -1,0 +1,15 @@
+* text=auto
+
+*.py text eol=lf
+*.js text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.csv text eol=lf
+*.sh text eol=lf
+*.bat text eol=crlf
+
+# Generated avatar assets should not dominate GitHub language statistics.
+static/avatars/*.svg linguist-generated=true
+static/avatars/manifest.json linguist-generated=true
