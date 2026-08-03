@@ -4,14 +4,6 @@
   <p><strong>人物关系图谱工作台</strong></p>
   <p>一个零第三方依赖、可本地运行的人物关系图谱创建与可视化工具。</p>
 
-  <p>
-    <img alt="Python 3.10+" src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white">
-    <img alt="Zero dependencies" src="https://img.shields.io/badge/dependencies-zero-16A34A">
-    <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-2563EB">
-    <img alt="Local first" src="https://img.shields.io/badge/privacy-local--first-7C3AED">
-  </p>
-</div>
-
 ## 项目简介
 
 Person Relation Graph Studio 是一个面向人物关系数据的本地网页工具。它使用 Python 标准库提供本地服务，并通过原生 HTML、CSS、JavaScript 和 Canvas 完成图谱渲染，无需 Flask、数据库、Node.js 或外部 CDN。
@@ -189,4 +181,4 @@ python tools/generate_avatars.py
 
 ## 开源协议
 
-本项目采用 [MIT License](LICENSE)。你可以自由使用、修改和分发，但需保留原始版权与许可声明。
+本项目采用 [MIT License](LICENSE)。可以自由使用、修改和分发，但需保留原始版权与许可声明。
