@@ -189,4 +189,4 @@ python tools/generate_avatars.py
 
 ## 开源协议
 
-本项目采用 [MIT License](LICENSE)。你可以自由使用、修改和分发，但需保留原始版权与许可声明。
+本项目采用 [MIT License](LICENSE)。可以自由使用、修改和分发，但需保留原始版权与许可声明。
